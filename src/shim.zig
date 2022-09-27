@@ -30,6 +30,12 @@ pub fn cancelLoopForever() void {
     Underlying.cancelLoop();
 }
 
+/// yields control to the browser in emscripten with `-sASYNCIFY` set
+/// is a no-op in native code
+pub fn yieldControl() void {
+    Underlying.yieldControl();
+}
+
 /// in emscripten, (only?) works if the `-sASYNCIFY` flag is passed to the 
 /// emscripten link step
 /// this is an alternative to forcing control of the main loop to be given to 
@@ -64,6 +70,10 @@ const Emscripten = struct {
     fn delayMs(delay: u32) void {
         emscripten.emscripten_sleep(delay);
     }
+
+    fn yieldControl() void {
+        emscripten.?.emscripten_sleep(0);
+    }
 };
 const Native = struct {
     const Loop = struct {
@@ -93,6 +103,8 @@ const Native = struct {
     fn delayMs(delay: u32) void {
         sdl2.delay(delay);
     }
+
+    fn yieldControl() void {}
 };
 
 const Underlying = if (is_emscripten) Emscripten else Native;
@@ -127,8 +139,8 @@ fn convertCallbackDataPair(comptime f: anytype, data: anytype) CallbackDataPair 
     const DataType = @TypeOf(data, dummy_f_arg);
 
     const fn_storage = struct {
-        var data: DataType = undefined;
-        pub fn f(user_data: ?*anyopaque) callconv(.C) void {
+        var static_data: DataType = undefined;
+        pub fn callback(user_data: ?*anyopaque) callconv(.C) void {
             if (f_returns_error_union) {
                 f(@ptrCast(?*DataType, @alignCast(@alignOf(DataType), user_data)).?.*) catch {};
             } else {
@@ -136,8 +148,8 @@ fn convertCallbackDataPair(comptime f: anytype, data: anytype) CallbackDataPair 
             }
         }
     };
-    fn_storage.data = @as(DataType, data);
-    return .{ .f = fn_storage.f, .data = @ptrCast(?*anyopaque, &fn_storage.data) };
+    fn_storage.static_data = @as(DataType, data);
+    return .{ .f = fn_storage.callback, .data = @ptrCast(?*anyopaque, &fn_storage.static_data) };
 }
 
 // TODO: fix tests to use convertCallbackPair by itself rather than loopForeverWith
