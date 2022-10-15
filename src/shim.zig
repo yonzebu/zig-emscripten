@@ -31,7 +31,8 @@ pub fn cancelLoopForever() void {
 }
 
 /// yields control to the browser in emscripten with `-sASYNCIFY` set
-/// is a no-op in native code
+/// is a no-op in native code and probably basically a no-op in emscripten if 
+/// `-sASYNCIFY` is not set in emscripten
 pub fn yieldControl() void {
     Underlying.yieldControl();
 }
@@ -46,7 +47,8 @@ fn delayInLoop(delay: u32) void {
     sdl2.delay(delay);
 }
 
-const emscripten: ?type = if (is_emscripten) @cImport(@cInclude("emscripten.h")) else null;
+/// access to the raw header, locked behind an optional if not compiling for emscripten
+pub const emscripten_h: ?type = if (is_emscripten) @cImport(@cInclude("emscripten.h")) else null;
 
 const Atomic = std.atomic.Atomic;
 
@@ -55,24 +57,24 @@ const Emscripten = struct {
     fn enterLoopArg(comptime f: anytype, data: anytype) void {
         cancelLoop();
         const callback = convertCallbackDataPair(f, data);
-        emscripten.?.emscripten_set_main_loop_arg(callback.f, callback.data, 0, 1);
+        emscripten_h.?.emscripten_set_main_loop_arg(callback.f, callback.data, 0, 1);
     }
 
     fn enterLoopArgOld(comptime f: ArgCallback, data: *anyopaque) void {
         cancelLoop();
-        emscripten.?.emscripten_set_main_loop_arg(f, data, 0, 1);
+        emscripten_h.?.emscripten_set_main_loop_arg(f, data, 0, 1);
     }
     
     fn cancelLoop() void {
-        emscripten.?.emscripten_cancel_main_loop();
+        emscripten_h.?.emscripten_cancel_main_loop();
     }
 
     fn delayMs(delay: u32) void {
-        emscripten.emscripten_sleep(delay);
+        emscripten_h.emscripten_sleep(delay);
     }
 
     fn yieldControl() void {
-        emscripten.?.emscripten_sleep(0);
+        emscripten_h.?.emscripten_sleep(0);
     }
 };
 const Native = struct {
@@ -109,7 +111,7 @@ const Native = struct {
 
 const Underlying = if (is_emscripten) Emscripten else Native;
 const VoidCallback = fn() callconv(.C) void;
-const ArgCallback = fn(?*anyopaque) callconv(.C) void;
+const ArgCallback = std.meta.FnPtr(fn(?*anyopaque) callconv(.C) void);
 
 
 const CallbackDataPair = struct {
@@ -117,9 +119,9 @@ const CallbackDataPair = struct {
     data: ?*anyopaque,
 };
 
-// only works if there will only ever be one callback for any given function type/data type combo
-// so basically works perfectly for emscripten main loop but not necessarily for other things
-// currently only works for single-argument functions, although this can be hopefully changed eventually
+/// only works if there will only ever be one callback for any given function type/data type combo
+/// so basically works perfectly for emscripten main loop but not necessarily for other things
+/// currently only works for single-argument functions, although this can be hopefully changed eventually
 fn convertCallbackDataPair(comptime f: anytype, data: anytype) CallbackDataPair {
     const f_info = @typeInfo(@TypeOf(f));
     const data_info = @typeInfo(@TypeOf(data));
