@@ -65,8 +65,13 @@ pub fn main() !void {
 }
 
 ```
+Compiling this with the emscripten build step as described above should Just Work™ when run in a browser.
 
 ## Notes on compatibility
 * Currently uses `std.meta.FnPtr`, which is deprecated and will get removed
 * I'm not really maintaining this actively but feel free to report any issues or just fork this and modify it yourself
 * Again, this will hopefully become obsolete if/when zig gets better support for emscripten
+* There are pieces of the zig standard library that won't compile, but as a general rule of thumb: if a portion of the stdlib is supported by the `wasm32-wasi` target, it's *probably* supported by this
+
+## Credit, I guess?
+[pacman.zig](https://github.com/floooh/pacman.zig), [this demo gist](https://gist.github.com/kripken/58c0e640227fe5bac9e7b30100a2a1d3#emscripten-as-a-linker-for-zig-and-c), and [zig issue #10836](https://github.com/ziglang/zig/issues/10836) provided a lot of the ideas that this is built on. Honestly, all I did was try to make those ideas a little more reusable.
